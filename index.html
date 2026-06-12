@@ -138,14 +138,20 @@
 <div class="container">
   <h1>📅 Familiepoll: weekends augustus & september 2026</h1>
   <p class="gezin-banner">👪 Graag één stem per gezin doorgeven.</p>
-  <p class="subtitle">Vul je (gezins)naam in en vink alle dagen aan waarop jullie kunnen. Je mag op meerdere data stemmen. Al gestemd? Klik op je naam bij de resultaten — of vul dezelfde naam opnieuw in — om je keuze aan te passen.</p>
+  <p class="subtitle">Vul je naam in en vink alle dagen aan waarop jullie kunnen. Je mag op meerdere data stemmen, maar je kan je stem maar één keer doorgeven. Wil je nadien toch iets aanpassen? Laat het aan Sam weten.</p>
 
   <div class="card">
-    <label class="name-label" for="naam">Naam (1 stem per gezin)</label>
-    <input type="text" id="naam" placeholder="bv. Sam en Gianna" autocomplete="off">
-    <div id="datums"></div>
-    <button class="stem-btn" onclick="stem()">✅ Stem opslaan</button>
-    <div class="melding" id="melding"></div>
+    <div id="stemformulier">
+      <label class="name-label" for="naam">Naam (1 stem per gezin)</label>
+      <input type="text" id="naam" placeholder="bv. Sam en Gianna" autocomplete="off">
+      <div id="datums"></div>
+      <button class="stem-btn" onclick="stem()">✅ Stem opslaan</button>
+      <div class="melding" id="melding"></div>
+    </div>
+    <div id="alGestemd" style="display:none">
+      <p style="font-size:1.05rem;margin:0 0 8px;">✅ Er is al gestemd vanaf dit toestel als <strong id="alGestemdNaam"></strong>. Bedankt!</p>
+      <p style="color:var(--muted);margin:0;">Wil je toch nog iets aanpassen? Laat het aan Sam weten — alleen de host kan stemmen wijzigen.</p>
+    </div>
   </div>
 
   <div class="card">
@@ -164,6 +170,8 @@
 
 <script>
 const API = 'https://api.npoint.io/6ca15f4008276e1cd2c3';
+const GESTEMD_KEY = 'familie-poll-gestemd';
+const isHost = new URLSearchParams(location.search).get('beheer') === 'bbq2026';
 let cacheStemmen = {};
 const MAANDEN = ['augustus', 'september'];
 const DAGEN = [];
@@ -252,7 +260,12 @@ async function stem() {
     // eerst de laatste stand ophalen, zodat we geen stemmen van anderen overschrijven
     const stemmen = await laadStemmen();
     const bestond = Object.keys(stemmen).some(n => n.toLowerCase() === naam.toLowerCase());
-    // bestaande naam (hoofdletterongevoelig) overschrijven
+    if (bestond && !isHost) {
+      melding.style.display = 'block';
+      melding.textContent = '⚠️ Er is al gestemd onder deze naam. Wil je die stem aanpassen? Laat het aan Sam weten — alleen de host kan stemmen wijzigen.';
+      return;
+    }
+    // bestaande naam (hoofdletterongevoelig) overschrijven — kan enkel in beheermodus
     for (const n of Object.keys(stemmen)) {
       if (n.toLowerCase() === naam.toLowerCase()) delete stemmen[n];
     }
@@ -265,6 +278,10 @@ async function stem() {
     melding.textContent = tekst;
     renderResultaten(stemmen);
     toonFoto(tekst + ' Tot op de barbecue! 🔥');
+    if (!isHost) {
+      localStorage.setItem(GESTEMD_KEY, naam);
+      vergrendel();
+    }
   } catch (e) {
     melding.style.display = 'block';
     melding.textContent = '⚠️ Opslaan mislukt (' + e.message + '). Controleer je internetverbinding en probeer opnieuw.';
@@ -272,6 +289,12 @@ async function stem() {
     knop.disabled = false;
     knop.textContent = '✅ Stem opslaan';
   }
+}
+
+function vergrendel() {
+  document.getElementById('stemformulier').style.display = 'none';
+  document.getElementById('alGestemdNaam').textContent = localStorage.getItem(GESTEMD_KEY) || '';
+  document.getElementById('alGestemd').style.display = 'block';
 }
 
 function toonFoto(tekst) {
@@ -336,8 +359,10 @@ function renderResultaten(stemmen) {
             '<td>' + (wie.map(esc).join(', ') || '—') + '</td></tr>';
   }
   html += '</table>';
-  const links = namen.map(n => '<a href="#" class="edit-naam" data-naam="' + esc(n) + '">' + esc(n) + '</a>').join(', ');
-  html += '<p style="margin-bottom:0;color:var(--muted);font-size:0.85rem;">⭐ = populairste dag · ' + namen.length + ' ' + (namen.length === 1 ? 'gezin heeft' : 'gezinnen hebben') + ' gestemd: ' + links + ' <em>(klik op een naam om die stem aan te passen)</em></p>';
+  const naamLijst = isHost
+    ? namen.map(n => '<a href="#" class="edit-naam" data-naam="' + esc(n) + '">' + esc(n) + '</a>').join(', ') + ' <em>(klik op een naam om die stem aan te passen)</em>'
+    : namen.map(esc).join(', ');
+  html += '<p style="margin-bottom:0;color:var(--muted);font-size:0.85rem;">⭐ = populairste dag · ' + namen.length + ' ' + (namen.length === 1 ? 'gezin heeft' : 'gezinnen hebben') + ' gestemd: ' + naamLijst + '</p>';
   el.innerHTML = html;
 }
 
@@ -345,14 +370,21 @@ renderDatums();
 document.getElementById('resultaten').innerHTML = '<p class="geen-stemmen">⏳ Stemmen laden…</p>';
 vernieuwResultaten();
 setInterval(vernieuwResultaten, 60000); // elke minuut automatisch verversen
-document.getElementById('naam').addEventListener('change', vulBestaandeStemIn);
-document.getElementById('resultaten').addEventListener('click', (e) => {
-  const link = e.target.closest('a.edit-naam');
-  if (link) {
-    e.preventDefault();
-    bewerkStem(link.dataset.naam);
-  }
-});
+if (!isHost && localStorage.getItem(GESTEMD_KEY)) vergrendel();
+if (isHost) {
+  const b = document.createElement('p');
+  b.className = 'gezin-banner';
+  b.textContent = '🔧 Beheermodus actief — klik op een naam bij de resultaten om die stem aan te passen.';
+  document.querySelector('.container').insertBefore(b, document.querySelector('.subtitle'));
+  document.getElementById('naam').addEventListener('change', vulBestaandeStemIn);
+  document.getElementById('resultaten').addEventListener('click', (e) => {
+    const link = e.target.closest('a.edit-naam');
+    if (link) {
+      e.preventDefault();
+      bewerkStem(link.dataset.naam);
+    }
+  });
+}
 </script>
 </body>
 </html>
