@@ -99,15 +99,6 @@
   tr.topscore td { background: var(--accent-light); }
   tr.topscore td.count { color: var(--accent); }
   .geen-stemmen { color: var(--muted); }
-  .reset-row { text-align: right; margin-top: 12px; }
-  .reset-row button {
-    background: none;
-    border: none;
-    color: var(--muted);
-    text-decoration: underline;
-    cursor: pointer;
-    font-size: 0.85rem;
-  }
   .gezin-banner {
     background: #fff4d6;
     border: 1px solid #e6c763;
@@ -160,7 +151,6 @@
   <div class="card">
     <h2>📊 Resultaten <a href="#" onclick="vernieuwResultaten();return false;" style="font-size:0.8rem;color:var(--accent);">🔄 vernieuwen</a></h2>
     <div id="resultaten"></div>
-    <div class="reset-row"><button onclick="resetPoll()">Alle stemmen wissen</button></div>
   </div>
 </div>
 
@@ -349,18 +339,6 @@ function renderResultaten(stemmen) {
   const links = namen.map(n => '<a href="#" class="edit-naam" data-naam="' + esc(n) + '">' + esc(n) + '</a>').join(', ');
   html += '<p style="margin-bottom:0;color:var(--muted);font-size:0.85rem;">⭐ = populairste dag · ' + namen.length + ' ' + (namen.length === 1 ? 'gezin heeft' : 'gezinnen hebben') + ' gestemd: ' + links + ' <em>(klik op een naam om die stem aan te passen)</em></p>';
   el.innerHTML = html;
-}
-
-async function resetPoll() {
-  if (confirm('Zeker dat je ALLE stemmen van iedereen wil wissen?')) {
-    try {
-      await bewaarStemmen({});
-      document.querySelectorAll('#datums input').forEach(cb => { cb.checked = false; toggleStyle(cb); });
-      renderResultaten({});
-    } catch (e) {
-      alert('Wissen mislukt: ' + e.message);
-    }
-  }
 }
 
 renderDatums();
