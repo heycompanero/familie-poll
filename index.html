@@ -318,6 +318,27 @@ function bewerkStem(naam) {
   document.getElementById('naam').focus();
 }
 
+async function hernoemStem(oudeNaam) {
+  const nieuweNaam = prompt('Nieuwe naam voor "' + oudeNaam + '":', oudeNaam);
+  if (nieuweNaam === null) return;
+  const naam = nieuweNaam.trim();
+  if (!naam) { alert('De naam mag niet leeg zijn.'); return; }
+  if (naam === oudeNaam) return;
+  try {
+    const stemmen = await laadStemmen();
+    const botst = Object.keys(stemmen).some(n => n.toLowerCase() === naam.toLowerCase() && n.toLowerCase() !== oudeNaam.toLowerCase());
+    if (botst) { alert('Er bestaat al een stem met die naam.'); return; }
+    if (!(oudeNaam in stemmen)) { alert('Die naam bestaat niet meer — vernieuw de resultaten.'); return; }
+    const dagen = stemmen[oudeNaam];
+    delete stemmen[oudeNaam];
+    stemmen[naam] = dagen;
+    await bewaarStemmen(stemmen);
+    renderResultaten(stemmen);
+  } catch (e) {
+    alert('Naam wijzigen mislukt: ' + e.message);
+  }
+}
+
 function vulBestaandeStemIn() {
   const naam = document.getElementById('naam').value.trim().toLowerCase();
   const entry = Object.entries(cacheStemmen).find(([n]) => n.toLowerCase() === naam);
@@ -359,10 +380,22 @@ function renderResultaten(stemmen) {
             '<td>' + (wie.map(esc).join(', ') || '—') + '</td></tr>';
   }
   html += '</table>';
-  const naamLijst = isHost
-    ? namen.map(n => '<a href="#" class="edit-naam" data-naam="' + esc(n) + '">' + esc(n) + '</a>').join(', ') + ' <em>(klik op een naam om die stem aan te passen)</em>'
-    : namen.map(esc).join(', ');
-  html += '<p style="margin-bottom:0;color:var(--muted);font-size:0.85rem;">⭐ = populairste dag · ' + namen.length + ' ' + (namen.length === 1 ? 'gezin heeft' : 'gezinnen hebben') + ' gestemd: ' + naamLijst + '</p>';
+  html += '<p style="margin-bottom:0;color:var(--muted);font-size:0.85rem;">⭐ = populairste dag · ' + namen.length + ' ' + (namen.length === 1 ? 'gezin heeft' : 'gezinnen hebben') + ' gestemd.</p>';
+  if (isHost) {
+    html += '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">' +
+            '<p style="margin:0 0 6px;font-size:0.85rem;font-weight:600;">🔧 Beheer per gezin:</p>';
+    for (const n of namen) {
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;font-size:0.9rem;">' +
+              '<span>' + esc(n) + '</span>' +
+              '<span style="white-space:nowrap;">' +
+              '<a href="#" class="edit-naam" data-naam="' + esc(n) + '">✏️ stem</a> · ' +
+              '<a href="#" class="hernoem-naam" data-naam="' + esc(n) + '">✏️ naam</a>' +
+              '</span></div>';
+    }
+    html += '</div>';
+  } else {
+    html += '<p style="margin:6px 0 0;color:var(--muted);font-size:0.85rem;">Gestemd: ' + namen.map(esc).join(', ') + '</p>';
+  }
   el.innerHTML = html;
 }
 
@@ -374,14 +407,20 @@ if (!isHost && localStorage.getItem(GESTEMD_KEY)) vergrendel();
 if (isHost) {
   const b = document.createElement('p');
   b.className = 'gezin-banner';
-  b.textContent = '🔧 Beheermodus actief — klik op een naam bij de resultaten om die stem aan te passen.';
+  b.textContent = '🔧 Beheermodus actief — "✏️ stem" past de gekozen dagen aan, "✏️ naam" wijzigt de naam.';
   document.querySelector('.container').insertBefore(b, document.querySelector('.subtitle'));
   document.getElementById('naam').addEventListener('change', vulBestaandeStemIn);
   document.getElementById('resultaten').addEventListener('click', (e) => {
-    const link = e.target.closest('a.edit-naam');
-    if (link) {
+    const stemLink = e.target.closest('a.edit-naam');
+    if (stemLink) {
       e.preventDefault();
-      bewerkStem(link.dataset.naam);
+      bewerkStem(stemLink.dataset.naam);
+      return;
+    }
+    const naamLink = e.target.closest('a.hernoem-naam');
+    if (naamLink) {
+      e.preventDefault();
+      hernoemStem(naamLink.dataset.naam);
     }
   });
 }
